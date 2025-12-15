@@ -3,11 +3,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
 
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+
 from database import SessionLocal
 from models import Usuario, Ticket, Interaccion
 from redis_client import cache_usuario, enviar_tarea
 
 app = FastAPI(title="Sistema de Tickets con Batch Worker")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite todas las solicitudes de cualquier origen
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos los métodos HTTP
+    allow_headers=["*"],  # Permite todos los encabezados
+)
+
 
 # ======================================================
 # ENUMS (coinciden EXACTAMENTE con los CHECK de Supabase)
@@ -116,6 +128,14 @@ def crear_ticket(
 
     return ticket
 
+# -----------------------
+# LISTAR TODOS LOS TICKETS (OPERADOR)
+# -----------------------
+@app.get("/tickets")
+def listar_tickets(db: Session = Depends(get_db)):
+    tickets = db.query(Ticket).order_by(Ticket.fecha_creacion.desc()).all()
+    return tickets
+
 # ======================================================
 # CAMBIAR ESTADO DEL TICKET (SOLO OPERADOR)
 # ======================================================
@@ -170,3 +190,15 @@ def historial_ticket(
     ).order_by(Interaccion.fecha_creacion.asc()).all()
 
     return historial
+
+# -----------------------
+# LISTAR TODOS LOS TICKETS
+# -----------------------
+@app.get("/tickets")
+def listar_tickets(db: Session = Depends(get_db)):
+    try:
+        tickets = db.query(Ticket).all()
+        return tickets
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Error al obtener tickets")
+
