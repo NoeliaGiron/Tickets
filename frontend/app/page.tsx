@@ -1,4 +1,3 @@
-// app/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -13,62 +12,72 @@ import { useRouter } from 'next/navigation';
 export default function Page() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [mostrarModal, setMostrarModal] = useState(false);
-  const { user, role, loading, logout } = useAuth(); 
-  const router = useRouter(); 
+
+  const { user, role, loading, logout } = useAuth();
+  const router = useRouter();
 
   /* =========================
-     PROTECCIÓN Y CARGA
+     PROTECCIÓN DE RUTA
   ========================== */
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/login'); 
+      router.push('/login');
     }
   }, [loading, user, router]);
 
+  /* =========================
+     CARGAR TICKETS
+  ========================== */
   const refrescarTickets = async () => {
-    if (user && role) {
-      // Pasa el ID y el Rol al backend para filtrar la lista
-      try {
-        const data = await getTickets(user.id, role); 
-        setTickets(data);
-      } catch (error) {
-          console.error("Fallo al cargar tickets:", error);
-      }
+    if (!user || !role) return;
+
+    try {
+      const data = await getTickets(user.id, role);
+      setTickets(data);
+    } catch (error) {
+      console.error('Fallo al cargar tickets:', error);
     }
   };
 
   useEffect(() => {
-      if (user) {
-          refrescarTickets();
-      }
-  }, [user]); 
+    if (user) {
+      refrescarTickets();
+    }
+  }, [user]);
 
-  const actualizarTicket = async (updatedTicket: Ticket) => {
+  /* =========================
+     ACTUALIZAR TICKET (OPERADOR)
+  ========================== */
+  const actualizarTicket = (updatedTicket: Ticket) => {
     setTickets((prev) =>
-      prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
+      prev.map((t) =>
+        t.id_ticket === updatedTicket.id_ticket ? updatedTicket : t
+      )
     );
   };
 
-  if (loading || !user) return null; 
+  if (loading || !user) return null;
 
   return (
     <main className="p-8 max-w-7xl mx-auto">
 
-      {/* BOTÓN DE CERRAR SESIÓN */}
-      <button
-        onClick={logout}
-        className="top-4 right-4 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition"
-      >
-        Cerrar Sesión ({user.rol})
-      </button>
+      {/* BOTÓN CERRAR SESIÓN */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={logout}
+          className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition"
+        >
+          Cerrar Sesión ({role})
+        </button>
+      </div>
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-slate-800">
-          🎫 Gestión de Tickets (Rol: {role})
+          🎫 Gestión de Tickets
         </h1>
-        
-        {/* LÓGICA DE VISIBILIDAD: SOLO EL OPERADOR PUEDE CREAR TICKET */}
+
+        {/* SOLO OPERADOR CREA */}
         {role === 'operador' && (
           <button
             onClick={() => setMostrarModal(true)}
@@ -78,26 +87,32 @@ export default function Page() {
           </button>
         )}
       </div>
-      
+
       {/* STATS */}
       <DashboardStats tickets={tickets} />
 
-      {/* LISTA */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {tickets.map((ticket) => (
-          <TicketCard
-            key={ticket.id}
-            ticket={ticket}
-            onUpdate={actualizarTicket}
-          />
-        ))}
+      {/* LISTA DE TICKETS */}
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
+        {tickets.length === 0 ? (
+          <p className="text-slate-500 italic">
+            No hay tickets para mostrar
+          </p>
+        ) : (
+          tickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id_ticket}
+              ticket={ticket}
+              onUpdate={actualizarTicket}
+            />
+          ))
+        )}
       </section>
 
       {/* MODAL NUEVO TICKET */}
-      {mostrarModal && (
+      {mostrarModal && role === 'operador' && (
         <NewTicketModal
           onClose={() => setMostrarModal(false)}
-          onCreated={refrescarTickets} 
+          onCreated={refrescarTickets}
         />
       )}
     </main>

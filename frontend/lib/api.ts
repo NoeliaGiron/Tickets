@@ -63,6 +63,7 @@ export async function registerUser(
 ====================================================== */
 
 interface TicketBackend {
+id_usuario: number;
   id_ticket: number;
   asunto: string;
   descripcion: string;
@@ -73,7 +74,8 @@ interface TicketBackend {
 
 function mapTicket(t: TicketBackend): Ticket {
   return {
-    id: String(t.id_ticket),
+    id_usuario: t.id_usuario,
+    id_ticket: t.id_ticket,
     asunto: t.asunto,
     descripcion: t.descripcion,
     prioridad:
@@ -81,10 +83,10 @@ function mapTicket(t: TicketBackend): Ticket {
       t.prioridad.slice(1) as Ticket['prioridad'],
     estado:
       t.estado === 'en_proceso'
-        ? 'En Progreso'
+        ? 'en_proceso'
         : (t.estado.charAt(0).toUpperCase() +
             t.estado.slice(1)) as Ticket['estado'],
-    fechaCreacion: new Date(t.fecha_creacion),
+    fecha_creacion: new Date(t.fecha_creacion),
   };
 }
 
@@ -92,26 +94,16 @@ function mapTicket(t: TicketBackend): Ticket {
    1. OBTENER TICKETS
 ====================================================== */
 
-export async function getTickets(
-  userId: number,
-  userRole: UserRole
-): Promise<Ticket[]> {
-  const params = new URLSearchParams({
-    user_id: String(userId),
-    user_role: userRole,
-  });
-
-  const res = await fetch(`${API_URL}/tickets?${params}`, {
-    cache: 'no-store',
-  });
+export async function getTickets(userId: number, role: string) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/tickets?user_id=${userId}&rol=${role}`
+  );
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Error al obtener tickets');
+    throw new Error('Error al obtener tickets');
   }
 
-  const data: TicketBackend[] = await res.json();
-  return data.map(mapTicket);
+  return res.json();
 }
 
 /* ======================================================
@@ -209,3 +201,6 @@ export async function getHistorialTicket(
 
   return res.json();
 }
+
+
+

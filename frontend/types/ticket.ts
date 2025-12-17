@@ -8,14 +8,17 @@ export type TicketPriority =
   | 'Media'
   | 'Alta';
 
+// types/ticket.ts
 export interface Ticket {
-  id: string;
+  id_ticket: number;
+  id_usuario: number;
   asunto: string;
-  descripcion: string; // 🛑 DEBE EXISTIR EN EL TIPO PRINCIPAL
-  prioridad: 'Baja' | 'Media' | 'Alta';
-  estado: 'Abierto' | 'En Progreso' | 'Cerrado';
-  fechaCreacion: Date;
+  descripcion: string;
+  estado: 'abierto' | 'en_proceso' | 'cerrado';
+  prioridad: 'baja' | 'media' | 'alta';
+  fecha_creacion: Date;
 }
+
 
 export type UserRole = 'admin' | 'operador' | 'cliente';
 

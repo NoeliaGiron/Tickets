@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 # ======================================================
-# DB DEPENDENCY (LAZY INIT)
+# DB DEPENDENCY
 # ======================================================
 def get_db():
     init_db()
@@ -57,6 +57,7 @@ class EstadoTicket(str, PyEnum):
 # ======================================================
 class Usuario(Base):
     __tablename__ = "usuarios"
+
     id_usuario = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, nullable=False)
@@ -65,6 +66,7 @@ class Usuario(Base):
 
 class Ticket(Base):
     __tablename__ = "tickets"
+
     id_ticket = Column(Integer, primary_key=True, index=True)
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
     asunto = Column(String(200), nullable=False)
@@ -77,6 +79,7 @@ class Ticket(Base):
 
 class Interaccion(Base):
     __tablename__ = "interacciones"
+
     id_interaccion = Column(Integer, primary_key=True, index=True)
     id_ticket = Column(Integer, ForeignKey("tickets.id_ticket"), nullable=False)
     autor = Column(Enum(RolUsuario), nullable=False)
@@ -103,8 +106,12 @@ class TicketCreateOperator(BaseModel):
     descripcion: str
     prioridad: PrioridadTicket
 
+class TicketUpdate(BaseModel):
+    estado: EstadoTicket
+    prioridad: PrioridadTicket
+
 # ======================================================
-# ENDPOINTS
+# AUTH
 # ======================================================
 @app.post("/auth/register")
 def register_user(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
@@ -115,18 +122,97 @@ def register_user(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
     db.add(usuario)
     db.commit()
     db.refresh(usuario)
-    return {"id_usuario": usuario.id_usuario}
+
+    return {
+        "id": usuario.id_usuario,
+        "nombre": usuario.nombre,
+        "rol": usuario.rol
+    }
 
 @app.post("/auth/login")
 def login_user(usuario_login: UsuarioLogin, db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.email == usuario_login.email).first()
     if not usuario:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    return {"id": usuario.id_usuario, "nombre": usuario.nombre, "rol": usuario.rol}
 
-@app.get("/me")
-def get_current_user(db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).first()
-    if not usuario:
-        raise HTTPException(status_code=404, detail="No hay usuarios")
-    return {"id": usuario.id_usuario, "nombre": usuario.nombre, "rol": usuario.rol}
+    return {
+        "id": usuario.id_usuario,
+        "nombre": usuario.nombre,
+        "rol": usuario.rol
+    }
+
+# ======================================================
+# TICKETS
+# ======================================================
+@app.get("/tickets")
+def get_tickets(
+    user_id: int,
+    rol: RolUsuario,
+    db: Session = Depends(get_db)
+):
+    try:
+        if rol == RolUsuario.cliente:
+            tickets = db.query(Ticket).filter(
+                Ticket.id_usuario == user_id
+            ).all()
+        else:
+            tickets = db.query(Ticket).all()
+
+        return tickets
+
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Error al obtener tickets")
+
+@app.post("/tickets")
+def crear_ticket_operador(
+    data: TicketCreateOperator,
+    rol: RolUsuario,
+    db: Session = Depends(get_db)
+):
+    if rol != RolUsuario.operador:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    cliente = db.query(Usuario).filter(
+        Usuario.email == data.client_email
+    ).first()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    ticket = Ticket(
+        id_usuario=cliente.id_usuario,
+        asunto=data.asunto,
+        descripcion=data.descripcion,
+        prioridad=data.prioridad
+    )
+
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+
+    return ticket
+
+@app.put("/tickets/{ticket_id}")
+def actualizar_ticket(
+    ticket_id: int,
+    data: TicketUpdate,
+    rol: RolUsuario,
+    db: Session = Depends(get_db)
+):
+    if rol == RolUsuario.cliente:
+        raise HTTPException(status_code=403, detail="Clientes no pueden editar tickets")
+
+    ticket = db.query(Ticket).filter(
+        Ticket.id_ticket == ticket_id
+    ).first()
+
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+
+    ticket.estado = data.estado
+    ticket.prioridad = data.prioridad
+
+    db.commit()
+    db.refresh(ticket)
+
+    return ticket
