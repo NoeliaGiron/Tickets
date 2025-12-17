@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # ======================================================
 # CONFIGURACIÓN DE FASTAPI
 # ======================================================
-app = FastAPI()
+app = FastAPI(root_path="/api")
 
 # Configuración de CORS
 
