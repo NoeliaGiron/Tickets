@@ -14,9 +14,9 @@ interface Props {
 
 export default function DashboardStats({ tickets }: Props) {
   const total = tickets.length;
-  const abiertos = tickets.filter(t => t.estado === 'Abierto').length;
-  const enProgreso = tickets.filter(t => t.estado === 'En Progreso').length;
-  const cerrados = tickets.filter(t => t.estado === 'Cerrado').length;
+  const abiertos = tickets.filter(t => t.estado === 'abierto').length;
+  const enProgreso = tickets.filter(t => t.estado === 'en_proceso').length;
+  const cerrados = tickets.filter(t => t.estado === 'cerrado').length;
 
   const stats = [
     {
