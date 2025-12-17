@@ -1,17 +1,20 @@
+# database.py
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = (
-    "postgresql+psycopg2://"
-    "rol_api.kcmmtuzwdfprxqqgvedk:"
-    "api_segura@"
-    "aws-0-us-west-2.pooler.supabase.com:6543/"
-    "postgres"
-)
+# Detectar entorno Vercel
+IS_VERCEL = os.environ.get("VERCEL") == "1"
+
+if IS_VERCEL:
+    DATABASE_URL = "sqlite:////tmp/tickets.db"
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'tickets.db')}"
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
+    connect_args={"check_same_thread": False}
 )
 
 SessionLocal = sessionmaker(
@@ -21,3 +24,9 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

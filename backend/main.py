@@ -17,6 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 # ======================================================
 app = FastAPI(root_path="/api")
 
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+
 # Configuración de CORS
 
 app.add_middleware(
