@@ -8,7 +8,7 @@ import TicketCard from '@/components/TicketCard';
 import DashboardStats from '@/components/DashboardStats';
 import NewTicketModal from '@/components/NewTicketModal';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation'; // <-- AGREGAR ESTA IMPORTACIÓN
+import { useRouter } from 'next/navigation';
 
 export default function Page() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -17,21 +17,23 @@ export default function Page() {
   const router = useRouter(); 
 
   /* =========================
-     PROTECCIÓN DE RUTA
+     PROTECCIÓN Y CARGA
   ========================== */
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/login'); // Redirige a login si no hay usuario
+      router.push('/login'); 
     }
   }, [loading, user, router]);
 
-  /* =========================
-     CARGAR TICKETS
-  ========================== */
   const refrescarTickets = async () => {
-    if (user) {
-      const data = await getTickets();
-      setTickets(data);
+    if (user && role) {
+      // Pasa el ID y el Rol al backend para filtrar la lista
+      try {
+        const data = await getTickets(user.id, role); 
+        setTickets(data);
+      } catch (error) {
+          console.error("Fallo al cargar tickets:", error);
+      }
     }
   };
 
@@ -42,10 +44,11 @@ export default function Page() {
   }, [user]); 
 
   const actualizarTicket = async (updatedTicket: Ticket) => {
-    // ... (El resto de esta función se mantiene igual)
+    setTickets((prev) =>
+      prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
+    );
   };
 
-  // Bloquea el renderizado si no hay usuario o está cargando
   if (loading || !user) return null; 
 
   return (
@@ -62,15 +65,18 @@ export default function Page() {
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-slate-800">
-          🎫 Gestión de Tickets (Usuario: {user.nombre})
+          🎫 Gestión de Tickets (Usuario: {user.nombre} | Rol: {role})
         </h1>
-        {/* Usando el color principal: bg-indigo-600 */}
-        <button
-          onClick={() => setMostrarModal(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition"
-        >
-          ➕ Nuevo Ticket
-        </button>
+        
+        {/* LÓGICA DE VISIBILIDAD: SOLO EL OPERADOR PUEDE CREAR TICKET */}
+        {role === 'operador' && (
+          <button
+            onClick={() => setMostrarModal(true)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition"
+          >
+            ➕ Nuevo Ticket para Cliente
+          </button>
+        )}
       </div>
       
       {/* STATS */}

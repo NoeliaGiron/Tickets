@@ -1,221 +1,176 @@
+// components/TicketCard.tsx
 'use client';
 
-import { useState } from 'react';
-import { Ticket, TicketPriority, TicketStatus } from '@/types/ticket';
+import { Ticket } from '@/types/ticket'; // Asumo que Ticket ya tiene la descripción
 import { useAuth } from '@/context/AuthContext';
+import { cambiarEstadoTicket, cambiarPrioridadTicket } from '@/lib/api'; 
+import { useState } from 'react';
+
+// Define el tipo de prioridad esperado por el frontend
+type FEPriority = 'Baja' | 'Media' | 'Alta';
 
 interface Props {
   ticket: Ticket;
-  onUpdate?: (ticket: Ticket) => void;
+  // onUpdate es CRUCIAL: permite al componente padre (la lista de tickets)
+  // actualizar el estado de un ticket específico sin recargar toda la lista.
+  onUpdate: (updatedTicket: Ticket) => void;
 }
 
+// Mapeo de estilos para la prioridad
+const priorityStyles: Record<FEPriority, string> = {
+  Baja: 'bg-green-100 text-green-700',
+  Media: 'bg-yellow-100 text-yellow-700',
+  Alta: 'bg-red-100 text-red-700',
+};
+
+// Mapeo de estilos para el estado
+const statusStyles: Record<Ticket['estado'], string> = {
+  Abierto: 'bg-blue-100 text-blue-700',
+  'En Progreso': 'bg-orange-100 text-orange-700',
+  Cerrado: 'bg-slate-100 text-slate-700',
+};
+
 export default function TicketCard({ ticket, onUpdate }: Props) {
-  const [mostrarModal, setMostrarModal] = useState(false);
-  const [editando, setEditando] = useState(false);
-  const [ticketEditado, setTicketEditado] = useState<Ticket>(ticket);
-
   const { role } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const isOperator = role === 'operador';
 
-  /* ===========================
-     GUARDAR CAMBIOS
-  =========================== */
-  const handleGuardar = () => {
-    onUpdate?.(ticketEditado);
-    setEditando(false);
-    setMostrarModal(false);
+  // Convierte el estado de FE a BE para la API
+  const mapFEStateToBE = (feState: Ticket['estado']): 'abierto' | 'en_proceso' | 'cerrado' => {
+    if (feState === 'En Progreso') return 'en_proceso';
+    if (feState === 'Abierto') return 'abierto';
+    return 'cerrado';
+  };
+  
+  // Convierte el estado de BE a FE para la UI
+  const mapBEStateToFE = (beState: 'abierto' | 'en_proceso' | 'cerrado'): Ticket['estado'] => {
+    if (beState === 'en_proceso') return 'En Progreso';
+    if (beState === 'abierto') return 'Abierto';
+    return 'Cerrado';
+  };
+  
+  // Convierte la prioridad de FE a BE para la API
+  const mapFEPriorityToBE = (fePriority: FEPriority): 'baja' | 'media' | 'alta' => {
+      return fePriority.toLowerCase() as 'baja' | 'media' | 'alta';
   };
 
-  const handleCerrar = () => {
-    const cerrado: Ticket = {
-      ...ticketEditado,
-      estado: 'Cerrado',
-    };
-    setTicketEditado(cerrado);
-    onUpdate?.(cerrado);
-    setMostrarModal(false);
+
+  const handleStatusChange = async (newStateBE: 'abierto' | 'en_proceso' | 'cerrado') => {
+    if (!isOperator || loading) return;
+    setLoading(true);
+    try {
+      await cambiarEstadoTicket(ticket.id, newStateBE);
+      
+      // Actualizamos el ticket en el frontend con el nuevo estado mapeado
+      onUpdate({ 
+          ...ticket, 
+          estado: mapBEStateToFE(newStateBE) 
+      });
+    } catch (error) {
+      alert('Error al cambiar el estado.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 🟢 FUNCIÓN PARA CAMBIAR PRIORIDAD
+  const handlePriorityChange = async (newPriorityFE: FEPriority) => {
+    if (!isOperator || loading) return;
+    setLoading(true);
+    
+    // Convertir a formato de Backend
+    const newPriorityBE = mapFEPriorityToBE(newPriorityFE);
+
+    try {
+      // 1. Llama a la API (el backend devuelve el objeto ticket actualizado)
+      const updatedBackendTicket = await cambiarPrioridadTicket(ticket.id, newPriorityBE);
+      
+      // 2. Usar onUpdate para sincronizar el cambio en el componente padre
+      onUpdate({
+          ...ticket,
+          // Reemplazamos la prioridad con la versión de FE
+          prioridad: newPriorityFE,
+          // Opcionalmente, puedes mapear todos los campos si el backend los devuelve
+      });
+      
+    } catch (error: any) {
+      alert(`Error al cambiar la prioridad: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /* ===========================
-     COLORES (SIN TOCAR)
-  =========================== */
-  const estadoColors: Record<TicketStatus, string> = {
-    Abierto: 'bg-green-100 text-green-700',
-    'En Progreso': 'bg-blue-100 text-blue-700',
-    Cerrado: 'bg-gray-100 text-gray-700',
-    /*Rechazado: 'bg-red-100 text-red-700',*/
-  };
-
-  const prioridadColors: Record<TicketPriority, string> = {
-    Baja: 'bg-slate-100 text-slate-700',
-    Media: 'bg-yellow-100 text-yellow-700',
-    Alta: 'bg-orange-100 text-orange-700',
-    /*Urgente: 'bg-red-100 text-red-700',*/
-  };
+  const currentPriorityStyle = priorityStyles[ticket.prioridad];
+  const currentStatusStyle = statusStyles[ticket.estado];
 
   return (
-    <>
-      {/* ===========================
-          CARD
-      =========================== */}
-      <div
-        onClick={() => setMostrarModal(true)}
-        className="bg-white rounded-2xl shadow-sm p-5 hover:shadow-md transition cursor-pointer"
-      >
-        <div className="flex gap-2 mb-3">
-          <span
-            className={`px-3 py-1 text-xs rounded-full ${estadoColors[ticket.estado]}`}
-          >
-            {ticket.estado}
-          </span>
-          <span
-            className={`px-3 py-1 text-xs rounded-full ${prioridadColors[ticket.prioridad]}`}
-          >
-            {ticket.prioridad}
-          </span>
-        </div>
-
-        <h3 className="font-semibold text-slate-800">
-          {ticket.asunto}
-        </h3>
+    <div className={`bg-white p-6 rounded-xl shadow-lg border-l-4 ${currentPriorityStyle.includes('red') ? 'border-red-500' : currentPriorityStyle.includes('yellow') ? 'border-yellow-500' : 'border-green-500'} transition duration-150`}>
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="text-xl font-semibold text-slate-800 line-clamp-2">{ticket.asunto}</h3>
+        <span className={`text-xs font-medium px-3 py-1 rounded-full ${currentPriorityStyle}`}>
+          {ticket.prioridad}
+        </span>
       </div>
 
-      {/* ===========================
-          MODAL (FONDO CORREGIDO)
-      =========================== */}
-      {mostrarModal && (
-        <div
-          className="fixed inset-0 bg-slate-100/80 backdrop-blur-sm flex items-center justify-center z-50"
-          onClick={() => setMostrarModal(false)}
-        >
-          <div
-            className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+      {/* 🟢 MOSTRAR DESCRIPCIÓN */}
+      <p className="text-sm text-slate-600 mb-4 line-clamp-3">
+          {ticket.descripcion || 'Sin descripción detallada.'} 
+      </p>
+
+      <div className="flex justify-between items-center text-sm text-slate-500 mb-4">
+        <span>ID: {ticket.id}</span>
+        <span>{ticket.fechaCreacion.toLocaleDateString()}</span>
+      </div>
+
+      {/* 🟢 CONTROL DE PRIORIDAD (SOLO OPERADOR) */}
+      {isOperator && (
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-slate-700 mb-1">
+            Cambiar Prioridad
+          </label>
+          <select
+            value={ticket.prioridad}
+            // Mapeamos el valor seleccionado a FEPriority para handlePriorityChange
+            onChange={(e) => handlePriorityChange(e.target.value as FEPriority)}
+            className="w-full border rounded-lg px-3 py-1 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={loading}
           >
-            <h2 className="text-xl font-bold mb-4">
-              {editando ? '✏️ Editar Ticket' : '🎫 Detalles del Ticket'}
-            </h2>
-
-            {/* ===========================
-                ESTADO
-            =========================== */}
-            <label className="block text-sm mb-1">Estado</label>
-            {editando ? (
-              <select
-                value={ticketEditado.estado}
-                onChange={(e) =>
-                  setTicketEditado({
-                    ...ticketEditado,
-                    estado: e.target.value as TicketStatus,
-                  })
-                }
-                className="w-full border rounded-lg px-3 py-2 mb-3"
-              >
-                <option value="Abierto">Abierto</option>
-                <option value="En Progreso">En Progreso</option>
-                <option value="Cerrado">Cerrado</option>
-                <option value="Rechazado">Rechazado</option>
-              </select>
-            ) : (
-              <p className="mb-3">{ticketEditado.estado}</p>
-            )}
-
-            {/* ===========================
-                PRIORIDAD
-            =========================== */}
-            <label className="block text-sm mb-1">Prioridad</label>
-            {editando ? (
-              <select
-                value={ticketEditado.prioridad}
-                onChange={(e) =>
-                  setTicketEditado({
-                    ...ticketEditado,
-                    prioridad: e.target.value as TicketPriority,
-                  })
-                }
-                className="w-full border rounded-lg px-3 py-2 mb-3"
-              >
-                <option value="Baja">Baja</option>
-                <option value="Media">Media</option>
-                <option value="Alta">Alta</option>
-                <option value="Urgente">Urgente</option>
-              </select>
-            ) : (
-              <p className="mb-3">{ticketEditado.prioridad}</p>
-            )}
-
-            {/* ===========================
-                ASUNTO
-            =========================== */}
-            <label className="block text-sm mb-1">Asunto</label>
-            {editando ? (
-              <input
-                value={ticketEditado.asunto}
-                onChange={(e) =>
-                  setTicketEditado({
-                    ...ticketEditado,
-                    asunto: e.target.value,
-                  })
-                }
-                className="w-full border rounded-lg px-3 py-2 mb-3"
-              />
-            ) : (
-              <p className="mb-3">{ticketEditado.asunto}</p>
-            )}
-
-            {/* ===========================
-                DESCRIPCIÓN
-            =========================== */}
-            <label className="block text-sm mb-1">Descripción</label>
-            {editando ? (
-              <textarea
-                value={ticketEditado.descripcion}
-                onChange={(e) =>
-                  setTicketEditado({
-                    ...ticketEditado,
-                    descripcion: e.target.value,
-                  })
-                }
-                rows={4}
-                className="w-full border rounded-lg px-3 py-2 mb-4"
-              />
-            ) : (
-              <p className="mb-4">{ticketEditado.descripcion}</p>
-            )}
-
-            {/* ===========================
-                BOTONES (ROLES)
-            =========================== */}
-            <div className="flex gap-3 justify-end">
-              {role !== 'cliente' && !editando && (
-                <button
-                  onClick={() => setEditando(true)}
-                  className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg"
-                >
-                  ✏️ Editar
-                </button>
-              )}
-
-              {editando && (
-                <button
-                  onClick={handleGuardar}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
-                >
-                  💾 Guardar
-                </button>
-              )}
-
-              {role === 'admin' && ticketEditado.estado !== 'Cerrado' && (
-                <button
-                  onClick={handleCerrar}
-                  className="px-4 py-2 bg-green-100 text-green-700 rounded-lg"
-                >
-                  ✓ Cerrar Ticket
-                </button>
-              )}
-            </div>
-          </div>
+            <option value="Baja">Baja</option>
+            <option value="Media">Media</option>
+            <option value="Alta">Alta</option>
+          </select>
         </div>
       )}
-    </>
+
+      {/* CONTROL DE ESTADO (SOLO OPERADOR) */}
+      <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+        <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${currentStatusStyle}`}>
+          {ticket.estado}
+        </span>
+        
+        {isOperator && (
+          <div className="flex space-x-2">
+            {ticket.estado !== 'En Progreso' && ticket.estado !== 'Cerrado' && (
+              <button
+                onClick={() => handleStatusChange('en_proceso')}
+                className="text-xs px-3 py-1 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
+                disabled={loading}
+              >
+                Procesar
+              </button>
+            )}
+            {ticket.estado !== 'Cerrado' && (
+              <button
+                onClick={() => handleStatusChange('cerrado')}
+                className="text-xs px-3 py-1 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition disabled:opacity-50"
+                disabled={loading}
+              >
+                Cerrar
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

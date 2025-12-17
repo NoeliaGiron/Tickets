@@ -11,9 +11,9 @@ export type TicketPriority =
 export interface Ticket {
   id: string;
   asunto: string;
-  descripcion: string;
-  prioridad: TicketPriority;
-  estado: TicketStatus;
+  descripcion: string; // 🛑 DEBE EXISTIR EN EL TIPO PRINCIPAL
+  prioridad: 'Baja' | 'Media' | 'Alta';
+  estado: 'Abierto' | 'En Progreso' | 'Cerrado';
   fechaCreacion: Date;
 }
 
